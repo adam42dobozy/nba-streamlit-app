@@ -926,7 +926,6 @@ def main():
 
                 st.write(
                     f"**Ellenfél:** {next_game['opponent']}  \n"
-                    f"**Teljes időpont:** {next_game['datetime_label']}"
                 )
 
             render_average_section(
