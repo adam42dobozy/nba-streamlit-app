@@ -389,13 +389,32 @@ def get_season_phase_label(game: dict):
 
 @st.cache_data(ttl=1800)
 def fetch_schedule_data():
-    response = retry_request(requests.get, SCHEDULE_URL, timeout=STATS_TIMEOUT)
-    response.raise_for_status()
-    return response.json()
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0 Safari/537.36"
+        )
+    }
+
+    try:
+        response = retry_request(
+            requests.get,
+            SCHEDULE_URL,
+            headers=headers,
+            timeout=STATS_TIMEOUT,
+        )
+        response.raise_for_status()
+        return response.json()
+    except (ReadTimeout, RequestException, ValueError):
+        return {}
 
 
 def get_next_team_game(team_id: int, team_abbr: str):
     schedule_data = fetch_schedule_data()
+
+    if not schedule_data:
+        return None
 
     league_schedule = schedule_data.get("leagueSchedule", {})
     game_dates = league_schedule.get("gameDates", [])
@@ -532,7 +551,7 @@ def fetch_playin_team_games(team_id: int, season: str) -> pd.DataFrame:
             league_id_nullable="00",
             timeout=STATS_TIMEOUT,
         ).get_data_frames()[0]
-    except (ReadTimeout, RequestException, ValueError, KeyError, TypeError):
+    except (ReadTimeout, RequestException, ValueError, KeyError, TypeError, IndexError):
         return pd.DataFrame()
 
     if df.empty:
@@ -616,7 +635,7 @@ def fetch_player_playin_games(player_id: int, team_playin_df: pd.DataFrame) -> p
                     "PTS": safe_int(row.get("PTS", 0)),
                 }
             )
-        except (ReadTimeout, RequestException, ValueError, KeyError, TypeError):
+        except (ReadTimeout, RequestException, ValueError, KeyError, TypeError, IndexError):
             continue
 
     if not player_rows:
@@ -787,9 +806,9 @@ def get_player_report(player_name: str, season: str, season_type: str, last_n_ga
             {
                 "Dátum": game_date,
                 "Párosítás": str(row["MATCHUP"]),
-                "Ell. konf.": opponent_status["conference"],
-                "Ell. helyezés": opponent_status["conf_rank"],
-                "Ell. mérleg": opponent_status["record"],
+                "Ellenfél konf.": opponent_status["conference"],
+                "Ellenfél helyezés": opponent_status["conf_rank"],
+                "Ellenfél mérleg": opponent_status["record"],
                 "Eredmény": str(row["WL"]),
                 "Állás": f"{own_score}-{opp_score}",
                 "MIN": format_minutes_display(row.get("MIN", 0)),
@@ -926,6 +945,7 @@ def main():
 
                 st.write(
                     f"**Ellenfél:** {next_game['opponent']}  \n"
+                    f"**Teljes időpont:** {next_game['datetime_label']}"
                 )
 
             render_average_section(
